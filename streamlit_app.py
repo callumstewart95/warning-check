@@ -1,9 +1,8 @@
 import streamlit as st
 import re
 import pandas as pd
-from io import StringIO
 
-# Warning code descriptions
+# Warning descriptions
 WARNING_CODES = {
     "P1": "Contains discriminatory language which some may find offensive",
     "P2": "Contains discriminatory content which some may find offensive",
@@ -29,38 +28,41 @@ WARNING_CODES = {
     "T4": "This programme/film deals with Eating Disorders"
 }
 
-# Matching phrases
-WARNING_PATTERNS = {
-    "P1": "discriminatory language",
-    "P2": "discriminatory content",
-    "P3": "discriminatory language and content",
-    "V1": "some violent scenes",
-    "V2": "prolonged violent scenes",
-    "V3": "graphic violent scenes",
-    "V4": "scenes of sexual violence",
-    "L1": "some strong language",
-    "L2": "strong language",
-    "L3": "very strong language",
-    "LA": "adult humour",
-    "D1": "some scenes which some viewers may find upsetting",
-    "D2": "scenes which some viewers may find upsetting",
-    "D3": "scenes which some viewers may find disturbing",
-    "S1": "some scenes of a sexual nature",
-    "S2": "scenes of a sexual nature",
-    "S3": "explicit sexual scenes",
-    "RFI": "repetitive flashing images",
-    "T1": "deals with suicide",
-    "T2": "deals with self-harm",
-    "T3": "deals with sexual abuse",
-    "T4": "deals with eating disorders"
-}
+# Prioritized phrases to avoid false matches
+PRIORITY_PATTERNS = [
+    ("L3", "very strong language"),
+    ("L1", "some strong language"),
+    ("L2", "strong language"),
+    ("LA", "adult humour"),
+    ("P3", "discriminatory language and content"),
+    ("P1", "discriminatory language"),
+    ("P2", "discriminatory content"),
+    ("V4", "scenes of sexual violence"),
+    ("V3", "graphic violent scenes"),
+    ("V2", "prolonged violent scenes"),
+    ("V1", "some violent scenes"),
+    ("D3", "scenes which some viewers may find disturbing"),
+    ("D1", "some scenes which some viewers may find upsetting"),
+    ("D2", "scenes which some viewers may find upsetting"),
+    ("S3", "explicit sexual scenes"),
+    ("S1", "some scenes of a sexual nature"),
+    ("S2", "scenes of a sexual nature"),
+    ("RFI", "repetitive flashing images"),
+    ("T3", "deals with sexual abuse"),
+    ("T1", "deals with suicide"),
+    ("T2", "deals with self-harm"),
+    ("T4", "deals with eating disorders"),
+]
 
-def detect_warnings(text):
-    found = []
-    for code, phrase in WARNING_PATTERNS.items():
-        if re.search(re.escape(phrase), text, re.IGNORECASE):
-            found.append((code, WARNING_CODES[code]))
-    return found
+def detect_warnings_precise(text):
+    found = set()
+    clean_text = text.lower()
+
+    for code, phrase in PRIORITY_PATTERNS:
+        if phrase in clean_text and code not in found:
+            found.add(code)
+
+    return [(code, WARNING_CODES[code]) for code in found]
 
 # Streamlit UI
 st.set_page_config(page_title="EBU STL Batch Warning Scanner", layout="wide")
@@ -75,7 +77,7 @@ if uploaded_files:
 
     for file in uploaded_files:
         content = file.read().decode(errors="ignore")
-        found = detect_warnings(content)
+        found = detect_warnings_precise(content)
 
         if found:
             for code, desc in found:
@@ -92,7 +94,6 @@ if uploaded_files:
             })
 
     df = pd.DataFrame(results)
-
     st.dataframe(df, use_container_width=True)
 
     # CSV download
@@ -100,4 +101,4 @@ if uploaded_files:
     st.download_button("📥 Download CSV Report", data=csv, file_name="stl_warnings_report.csv", mime="text/csv")
 
 else:
-    st.info("Upload one or more .stl files to begin.")
+    st.info("Upload one or more `.stl` files to begin.")
