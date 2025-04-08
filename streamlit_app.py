@@ -1,7 +1,9 @@
 import streamlit as st
 import re
+import pandas as pd
+from io import StringIO
 
-# Define codes and their full descriptions
+# Warning code descriptions
 WARNING_CODES = {
     "P1": "Contains discriminatory language which some may find offensive",
     "P2": "Contains discriminatory content which some may find offensive",
@@ -27,7 +29,7 @@ WARNING_CODES = {
     "T4": "This programme/film deals with Eating Disorders"
 }
 
-# Phrase fragments (lowercase) to help fuzzy match descriptions
+# Matching phrases
 WARNING_PATTERNS = {
     "P1": "discriminatory language",
     "P2": "discriminatory content",
@@ -37,7 +39,7 @@ WARNING_PATTERNS = {
     "V3": "graphic violent scenes",
     "V4": "scenes of sexual violence",
     "L1": "some strong language",
-    "L2": "strong language",  # fallback if L1 not matched
+    "L2": "strong language",
     "L3": "very strong language",
     "LA": "adult humour",
     "D1": "some scenes which some viewers may find upsetting",
@@ -53,7 +55,7 @@ WARNING_PATTERNS = {
     "T4": "deals with eating disorders"
 }
 
-def detect_warnings_in_text(text):
+def detect_warnings(text):
     found = []
     for code, phrase in WARNING_PATTERNS.items():
         if re.search(re.escape(phrase), text, re.IGNORECASE):
@@ -61,24 +63,41 @@ def detect_warnings_in_text(text):
     return found
 
 # Streamlit UI
-st.set_page_config(page_title="EBU STL Warning Checker", layout="wide")
-st.title("🔍 EBU STL Warning Code Scanner")
+st.set_page_config(page_title="EBU STL Batch Warning Scanner", layout="wide")
+st.title("🎬 EBU STL Warning Checker")
 
-uploaded_files = st.file_uploader("Upload one or more STL files", type=["stl"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Upload STL files", type=["stl"], accept_multiple_files=True)
+
+results = []
 
 if uploaded_files:
-    st.subheader("📋 Scan Results")
+    st.subheader("🔎 Scan Summary")
 
     for file in uploaded_files:
         content = file.read().decode(errors="ignore")
+        found = detect_warnings(content)
 
-        warnings_found = detect_warnings_in_text(content)
+        if found:
+            for code, desc in found:
+                results.append({
+                    "Filename": file.name,
+                    "Warning Code": code,
+                    "Description": desc
+                })
+        else:
+            results.append({
+                "Filename": file.name,
+                "Warning Code": "None",
+                "Description": "No warnings found"
+            })
 
-        with st.expander(f"📄 {file.name}"):
-            if warnings_found:
-                st.success(f"{len(warnings_found)} warning(s) found:")
-                for code, desc in warnings_found:
-                    st.markdown(f"- **{code}** — {desc}")
-            else:
-                st.info("✅ No warnings found.")
+    df = pd.DataFrame(results)
 
+    st.dataframe(df, use_container_width=True)
+
+    # CSV download
+    csv = df.to_csv(index=False)
+    st.download_button("📥 Download CSV Report", data=csv, file_name="stl_warnings_report.csv", mime="text/csv")
+
+else:
+    st.info("Upload one or more .stl files to begin.")
